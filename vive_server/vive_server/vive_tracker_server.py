@@ -19,11 +19,27 @@ import os
 
 from base_server import Server
 from gui import GuiManager
-from models import ViveDynamicObjectMessage, ViveStaticObjectMessage, Configuration
+from models import ViveDynamicObjectMessage, ViveDynamicControllerMessage, ViveStaticObjectMessage, Configuration
 from triad_openvr import TriadOpenVR
 
 
-def construct_socket_msg(data: ViveDynamicObjectMessage) -> str:
+def construct_controller_socket_msg(data: ViveDynamicControllerMessage) -> str:
+    """
+    Send vive controller message to socket
+
+    Args:
+        data: ViveTracker Message to send
+
+    Returns:
+        message in string to send
+
+    """
+    json_data = json.dumps(data.json(), sort_keys=False)
+    json_data = "&" + json_data
+    json_data = json_data + "\r"  # * (512 - len(json_data))
+    return json_data
+
+def construct_tracker_socket_msg(data: ViveDynamicObjectMessage) -> str:
     """
     Send vive tracker message to socket
 
@@ -113,58 +129,92 @@ class ViveTrackerServer(Server):
         # Main server loop
         while True:
             messages = {"state": {}}
-            # Transmit data over the network
+            # # Transmit data over the network
+            # try:
+            #     tracker_name, addr = self.socket.recvfrom(self.buffer_length)
+            #     tracker_name = tracker_name.decode()
+            #     tracker_key = self.resolve_name_to_key(tracker_name)
+            #     if tracker_key in self.get_tracker_keys():
+            #         message = self.poll_tracker(tracker_key=tracker_key)
+            #         messages["state"][tracker_key] = message
+            #         if message is not None:
+            #             socket_message = construct_socket_msg(data=message)
+            #             self.socket.sendto(socket_message.encode(), addr)
+            #             if self.should_record:
+            #                 self.record(data=message)
+            #     else:
+            #         self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
+            # except socket.timeout:
+            #     self.logger.info("Did not receive connection from client")
+            # except Exception as e:
+            #     self.logger.error(e)
+
             try:
-                tracker_name, addr = self.socket.recvfrom(self.buffer_length)
-                tracker_name = tracker_name.decode()
-                tracker_key = self.resolve_name_to_key(tracker_name)
-                if tracker_key in self.get_tracker_keys():
-                    message = self.poll_tracker(tracker_key=tracker_key)
-                    messages["state"][tracker_key] = message
+                # tracker_name, addr = self.socket.recvfrom(self.buffer_length)
+                # tracker_name = tracker_name.decode()
+                # tracker_key = self.resolve_name_to_key(tracker_name)
+                # if tracker_key in self.get_tracker_keys():
+                #     message = self.poll_tracker(tracker_key=tracker_key)
+                #     messages["state"][tracker_key] = message
+                #     if message is not None:
+                #         socket_message = construct_tracker_socket_msg(data=message)
+                #         self.socket.sendto(socket_message.encode(), addr)
+                #         if self.should_record:
+                #             self.record(data=message)
+                # else:
+                #     self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
+
+                controller_name, addr = self.socket.recvfrom(self.buffer_length)
+                controller_name = controller_name.decode()
+                controller_key = self.resolve_name_to_key(controller_name)
+                if controller_key in self.get_controller_keys():
+                    message = self.poll_controller(controller_key=controller_key)
+                    messages["state"][controller_key] = message
                     if message is not None:
-                        socket_message = construct_socket_msg(data=message)
+                        socket_message = construct_controller_socket_msg(data=message)
                         self.socket.sendto(socket_message.encode(), addr)
                         if self.should_record:
                             self.record(data=message)
                 else:
-                    self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
+                    self.logger.error(f"Controller {controller_name} with key {controller_key} not found")
+
             except socket.timeout:
                 self.logger.info("Did not receive connection from client")
             except Exception as e:
                 self.logger.error(e)
 
-            # See if any commands have been sent from the gui
-            while self.pipe.poll():
-                data = self.pipe.recv()
-                if "config" in data:
-                    self.config = data["config"]
-                    self.logger.info(f"Configuration updated")
-                if "save" in data:
-                    self.save_config(data["save"])
-                if "refresh" in data:
-                    self.logger.info("Refreshing system")
-                    self.reconnect_triad_vr()
-                if "calibrate" in data:
-                    self.calibrate_world_frame(*data["calibrate"])
+            # # See if any commands have been sent from the gui
+            # while self.pipe.poll():
+            #     data = self.pipe.recv()
+            #     if "config" in data:
+            #         self.config = data["config"]
+            #         self.logger.info(f"Configuration updated")
+            #     if "save" in data:
+            #         self.save_config(data["save"])
+            #     if "refresh" in data:
+            #         self.logger.info("Refreshing system")
+            #         self.reconnect_triad_vr()
+            #     if "calibrate" in data:
+            #         self.calibrate_world_frame(*data["calibrate"])
 
-            # Update the GUI
-            if self.use_gui:
-                # Make sure all trackers are shown in the GUI regardless of if they are being subscribed to
-                for tracker_key in self.get_tracker_keys():
-                    if tracker_key not in messages["state"]:
-                        message = self.poll_tracker(tracker_key=tracker_key)
-                        if message is not None:
-                            messages["state"][tracker_key] = message
-                for reference_key in self.get_tracking_reference_keys():
-                    if reference_key not in messages["state"]:
-                        message = self.poll_tracking_reference(tracking_reference_key=reference_key)
-                        if message is not None:
-                            messages["state"][reference_key] = message
+            # # Update the GUI
+            # if self.use_gui:
+            #     # Make sure all trackers are shown in the GUI regardless of if they are being subscribed to
+            #     for tracker_key in self.get_tracker_keys():
+            #         if tracker_key not in messages["state"]:
+            #             message = self.poll_tracker(tracker_key=tracker_key)
+            #             if message is not None:
+            #                 messages["state"][tracker_key] = message
+            #     for reference_key in self.get_tracking_reference_keys():
+            #         if reference_key not in messages["state"]:
+            #             message = self.poll_tracking_reference(tracking_reference_key=reference_key)
+            #             if message is not None:
+            #                 messages["state"][reference_key] = message
 
-                # Always send the current configuration to ensure synchronization with GUI
-                messages["config"] = self.config
+            #     # Always send the current configuration to ensure synchronization with GUI
+            #     messages["config"] = self.config
 
-                self.pipe.send(messages)
+            #     self.pipe.send(messages)
 
     def resolve_name_to_key(self, name):
         """
@@ -277,7 +327,7 @@ class ViveTrackerServer(Server):
             self.reconnect_triad_vr()
         return None
 
-    def poll_controller(self, controller_key) -> Optional[ViveDynamicObjectMessage]:
+    def poll_controller(self, controller_key) -> Optional[ViveDynamicControllerMessage]:
         """
         Polls controller message by name
 
@@ -292,7 +342,7 @@ class ViveTrackerServer(Server):
         """
         controller = self.get_device(key=controller_key)
         if controller is not None:
-            message: Optional[ViveDynamicObjectMessage] = self.create_dynamic_message(device=controller,
+            message: Optional[ViveDynamicControllerMessage] = self.create_dynamic_controller_message(device=controller,
                                                                                       device_key=controller_key)
             return message
         else:
@@ -392,6 +442,72 @@ class ViveTrackerServer(Server):
                                                qx=qx, qy=qy, qz=qz, qw=qw,
                                                vel_x=vel_x, vel_y=vel_y, vel_z=vel_z,
                                                p=p, q=q, r=r,
+                                               device_name=device_name,
+                                               serial_num=serial)
+            return message
+        except OSError as e:
+            self.logger.error(f"OSError: {e}. Need to restart Vive Tracker Server")
+            self.reconnect_triad_vr()
+        except Exception as e:
+            self.logger.error(f"Exception {e} has occurred, this may be because device {device} "
+                              f"is either offline or malfunctioned")
+            self.reconnect_triad_vr()
+            return None
+
+
+    def create_dynamic_controller_message(self, device, device_key) -> Optional[ViveDynamicControllerMessage]:
+        """
+        Create dynamic object message given device and device name
+
+        Note:
+            it will attempt to reconnect to OpenVR if conversion or polling from device went wrong.
+
+        Args:
+            device: tracker instance
+            device_key: the device's name corresponding to this tracker
+
+        Returns:
+            Vive dynamic message if this is a successful conversion, None otherwise
+
+        """
+        try:
+            _, _, _, r, p, y = device.get_pose_euler()
+            x, y, z, qw, qx, qy, qz = device.get_pose_quaternion()
+
+            vel_x, vel_y, vel_z = device.get_velocity()
+            p, q, r = device.get_angular_velocity()
+
+            # handle world transform
+            rot_vw = self.get_rot_vw()
+            x, y, z = rot_vw.apply([x, y, z])
+            x, y, z = self.translate_to_origin(x, y, z)
+
+            # bring velocities into the local device frame such that positive x is pointing out the USB port
+            rot_lv = transform.Rotation.from_quat([qx, qy, qz, qw]) * transform.Rotation.from_matrix([[0, 1, 0],
+                                                                                                      [1, 0, 0],
+                                                                                                      [0, 0, -1]])
+            vel_x, vel_y, vel_z = rot_lv.apply([vel_x, vel_y, vel_z], inverse=True)
+            p, q, r = rot_lv.apply([p, q, r], inverse=True)
+
+            qx, qy, qz, qw = rot_lv.inv().as_quat()
+
+            serial = device.get_serial()
+            device_name = device_key if serial not in self.config.name_mappings else self.config.name_mappings[serial]
+            cont_inputs = device.get_controller_inputs()
+
+            message = ViveDynamicControllerMessage(valid=True, x=x, y=y, z=z,
+                                               qx=qx, qy=qy, qz=qz, qw=qw,
+                                               vel_x=vel_x, vel_y=vel_y, vel_z=vel_z,
+                                               p=p, q=q, r=r, 
+                                               menu_butt=cont_inputs['menu_button'],
+                                               trig=cont_inputs['trigger'],
+                                               pad_x=cont_inputs['trackpad_x'],
+                                               pad_y=cont_inputs['trackpad_y'],
+                                               pad_touch=cont_inputs['trackpad_touched'],
+                                               pad_butt=cont_inputs['trackpad_pressed'],
+                                               ul_butt=cont_inputs['ulButtonPressed'],
+                                               ul_touch=cont_inputs['ulButtonTouched'],
+                                               grip_butt=cont_inputs['grip_button'],
                                                device_name=device_name,
                                                serial_num=serial)
             return message

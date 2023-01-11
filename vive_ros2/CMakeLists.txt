@@ -17,16 +17,62 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(vive_ros2 REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 #install(DIRECTORY launch
 #        DESTINATION share/${PROJECT_NAME}/
 #        )
 
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/VivePathCapture.srv"
+  "srv/VivePathReset.srv"
+  DEPENDENCIES nav_msgs # Add packages that above messages depend on
+)
+
 install(PROGRAMS
         scripts/vive_tracker_node.py
         scripts/vive_tracker_client.py
+        scripts/vive_controller_node.py
+        scripts/vive_controller_client.py
         DESTINATION lib/${PROJECT_NAME}
         )
+
+add_executable(vive_capture_service_server src/vive_capture_service_server.cpp)
+add_executable(vive_capture_service_listener src/vive_capture_service_listener.cpp)
+
+ament_target_dependencies(
+    vive_capture_service_server
+    vive_ros2
+    geometry_msgs
+    visualization_msgs
+    nav_msgs
+    rclcpp
+    tf2
+    tf2_ros
+)
+ament_target_dependencies(
+    vive_capture_service_listener
+    vive_ros2
+    sensor_msgs
+    rclcpp
+    geometry_msgs
+    nav_msgs
+)
+
+install(TARGETS
+  vive_capture_service_server
+  vive_capture_service_listener
+  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

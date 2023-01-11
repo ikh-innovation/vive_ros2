@@ -1,0 +1,5 @@
+
+bool data # for capture start/stop
+---
+string message # informational
+nav_msgs/Path[] segments # list of captured segments

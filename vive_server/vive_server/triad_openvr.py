@@ -72,7 +72,7 @@ class PoseSampleBuffer:
 
 
 def get_pose(vr_obj):
-    return vr_obj.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount)
+    return vr_obj.getDeviceToAbsoluteTrackingPose(openvr.TrackingUniverseRawAndUncalibrated, 0, openvr.k_unMaxTrackedDeviceCount)
 
 
 class TrackedDevice:
