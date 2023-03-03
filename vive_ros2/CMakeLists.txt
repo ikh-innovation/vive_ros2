@@ -18,7 +18,6 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(vive_ros2 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -28,9 +27,12 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
-#install(DIRECTORY launch
-#        DESTINATION share/${PROJECT_NAME}/
-#        )
+
+# Install launch files.
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -52,7 +54,6 @@ add_executable(vive_capture_service_listener src/vive_capture_service_listener.c
 
 ament_target_dependencies(
     vive_capture_service_server
-    vive_ros2
     geometry_msgs
     visualization_msgs
     nav_msgs
@@ -62,17 +63,27 @@ ament_target_dependencies(
 )
 ament_target_dependencies(
     vive_capture_service_listener
-    vive_ros2
     sensor_msgs
     rclcpp
     geometry_msgs
     nav_msgs
 )
 
+rosidl_target_interfaces(vive_capture_service_server
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+rosidl_target_interfaces(vive_capture_service_listener
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 install(TARGETS
   vive_capture_service_server
   vive_capture_service_listener
   DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

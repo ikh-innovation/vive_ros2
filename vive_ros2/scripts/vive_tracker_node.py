@@ -19,11 +19,11 @@ class ViveTrackerNode(Node):
         self.declare_parameter('host_port', 8000)
         self.declare_parameter('tracker_name', 'T_1')
         self.declare_parameter('topic', '')
-        self.declare_parameter('link_name', 'odom')
-        self.declare_parameter('child_link_name', 'tracker_link')
+        self.declare_parameter('odom_frame', 'odom')
+        self.declare_parameter('tracker_link', 'tracker_link')
 
-        (self.host_ip, self.host_port, self.tracker_name, self.link_name, self.child_link_name, self.topic) = self.get_parameters(
-            ['host_ip', 'host_port', 'tracker_name', 'link_name', 'child_link_name', 'topic'])
+        (self.host_ip, self.host_port, self.tracker_name, self.odom_frame, self.tracker_link, self.topic) = self.get_parameters(
+            ['host_ip', 'host_port', 'tracker_name', 'odom_frame', 'tracker_link', 'topic'])
 
         topic = self.topic.get_parameter_value().string_value
         topic_name = self.tracker_name.get_parameter_value().string_value + '/odom' if topic == "" else topic
@@ -47,9 +47,9 @@ class ViveTrackerNode(Node):
 
                 odom_msg = Odometry()
                 odom_msg.header.stamp = self.get_clock().now().to_msg()
-                odom_msg.header.frame_id = self.link_name.get_parameter_value().string_value
+                odom_msg.header.frame_id = self.odom_frame.get_parameter_value().string_value
 
-                odom_msg.child_frame_id = self.child_link_name.get_parameter_value().string_value
+                odom_msg.child_frame_id = self.tracker_link.get_parameter_value().string_value
 
                 odom_msg.pose.pose.position.x = msg.x
                 odom_msg.pose.pose.position.y = msg.y

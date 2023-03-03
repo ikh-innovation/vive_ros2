@@ -1,0 +1,47 @@
+import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    ld = LaunchDescription()
+    
+    config = os.path.join(
+        get_package_share_directory('vive_ros2'),
+        'config',
+        'params.yaml'
+        )
+
+    node1 = Node(
+            package='vive_ros2',
+            namespace='vive',
+            executable='vive_controller_node.py',
+            name='vive_server_interface',
+            arguments=[('__log_level:=debug')],
+            parameters=[config]
+        )
+
+    node2 = Node(
+            package='vive_ros2',
+            namespace='vive',
+            executable='vive_capture_service_server',
+            name='vive_services',
+            arguments=[('__log_level:=debug')],
+            parameters=[config]
+        )
+
+    node3 = Node(
+            package='vive_ros2',
+            namespace='vive',
+            executable='vive_capture_service_listener',
+            name='controller_client',
+            arguments=[('__log_level:=debug')],
+            parameters=[config]
+        )
+    
+
+    ld.add_action(node1)
+    ld.add_action(node2)
+    ld.add_action(node3)
+
+    return ld

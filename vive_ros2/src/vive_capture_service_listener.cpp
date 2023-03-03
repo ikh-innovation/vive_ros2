@@ -18,6 +18,10 @@ class ViveListener : public rclcpp::Node
       rclcpp::Client<vive_ros2::srv::VivePathCapture>::SharedPtr capture_client = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_capture");
       rclcpp::Client<vive_ros2::srv::VivePathReset>::SharedPtr   reset_client = this->create_client<vive_ros2::srv::VivePathReset>("/vive_pose_reset");
 
+      this->declare_parameter<std::string>("buttons_topic", "joy_inputs");
+      vive_controller_buttons_topic_ = this->get_parameter("buttons_topic").get_parameter_value().get<std::string>();
+
+
       while (!capture_client->wait_for_service(1s)) {
         if (!rclcpp::ok()) {
           RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the capture service. Exiting.");
@@ -33,7 +37,7 @@ class ViveListener : public rclcpp::Node
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Reset service not available, waiting again...");
       }     
 
-      subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(vive_controller_topic, 10, std::bind(&ViveListener::topic_callback, this, std::placeholders::_1));
+      subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(vive_controller_buttons_topic_, 10, std::bind(&ViveListener::topic_callback, this, std::placeholders::_1));
       capture_client_ = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_capture");
       reset_client_ = this->create_client<vive_ros2::srv::VivePathReset>("/vive_pose_reset");
     }
@@ -86,8 +90,7 @@ class ViveListener : public rclcpp::Node
     
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr subscription_;
 
-    std::string vive_controller_name = "controller_1";
-    std::string vive_controller_topic = "/joy_inputs";
+    std::string vive_controller_buttons_topic_ ;
     rclcpp::Client<vive_ros2::srv::VivePathCapture>::SharedPtr capture_client_ ;
     rclcpp::Client<vive_ros2::srv::VivePathReset>::SharedPtr reset_client_ ;
 

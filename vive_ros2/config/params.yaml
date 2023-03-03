@@ -1,0 +1,11 @@
+/**:
+  ros__parameters:
+    host_ip: "127.0.1.1"
+    host_port: 8000
+    tracker_name: "tracker_1"
+    controller_name: "controller_1"
+    topic: "" # if empty, topic name will default to /DEVICE_NAME/odom
+    odom_frame: "odom"
+    tracker_link: "vive_tracker_link"
+    controller_link: "vive_controller_link"
+    buttons_topic: "joy_inputs"

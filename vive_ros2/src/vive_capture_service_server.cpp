@@ -29,8 +29,12 @@ public:
   VivePathCaptureServer()
   : Node("turtle_tf2_frame_listener")
   {
-    // Declare and acquire `target_frame` parameter
-    target_frame_ = this->declare_parameter<std::string>("target_frame", "world");
+    // Declare and acquire parameters
+    this->declare_parameter<std::string>("target_frame", "world");
+    this->declare_parameter<std::string>("controller_link", "controller_link");
+    target_frame_ = this->get_parameter("target_frame").get_parameter_value().get<std::string>();
+    controller_frame_ = this->get_parameter("controller_link").get_parameter_value().get<std::string>();
+
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
@@ -61,11 +65,11 @@ public:
     executor.add_node(this->get_node_base_interface());
     // Store frame names in variables that will be used to
     // compute transformations
-    std::string fromFrameRel = target_frame_.c_str();
-    std::string toFrameRel = "controller_link";
+    std::string fromFrameRel = target_frame_;
+    std::string toFrameRel = controller_frame_;
     
     geometry_msgs::msg::PoseStamped pose ;
-    pose.header.frame_id = "world" ;
+    pose.header.frame_id = target_frame_;
     while (rclcpp::ok()){
       // RCLCPP_INFO(this->get_logger(),"Spinning...");
       if (capture_on){
@@ -110,7 +114,7 @@ private:
   void PoseCaptureCallback(const std::shared_ptr<vive_ros2::srv::VivePathCapture::Request>  request,
                                  std::shared_ptr<vive_ros2::srv::VivePathCapture::Response> response){
     capture_on = request->data ;
-    current_segment.header.frame_id = "world" ;
+    current_segment.header.frame_id = target_frame_ ;
     
 
     std::random_device rd; 
@@ -121,7 +125,7 @@ private:
       marker_ = {};
       RCLCPP_INFO(this->get_logger(),"Capturing segments...");
       std::string ns = "path_" + std::to_string(segments.size());
-      marker_.header.frame_id = "world" ;
+      marker_.header.frame_id = target_frame_ ;
       marker_.header.stamp = this->get_clock()->now();
       rclcpp::Duration lt = rclcpp::Duration::from_seconds(0.0);
       marker_.lifetime = lt; 
@@ -161,7 +165,7 @@ private:
   void ResetCaptureCallback(const std::shared_ptr<vive_ros2::srv::VivePathReset::Request>  request,
                                  std::shared_ptr<vive_ros2::srv::VivePathReset::Response> response){
     reset_flag = request->data ;
-    current_segment.header.frame_id = "world" ;
+    current_segment.header.frame_id = target_frame_ ;
     if (reset_flag){
       // nav_msgs::msg::Path current_segment {}; 
       RCLCPP_INFO(this->get_logger(),"Reset all captured paths.");
@@ -223,12 +227,12 @@ private:
 
   // thread stuff. To delete.
   std::thread thread_obj_1;
-  std::thread thread_obj_2;
-  
-  // tf stuff
+
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::string target_frame_;
+  std::string controller_frame_;
+
 };
 
 int main(int argc, char * argv[])

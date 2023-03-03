@@ -19,21 +19,22 @@ class ViveControllerNode(Node):
 
     def __init__(self):
         super().__init__('vive_controller_node')
-        self.declare_parameter('host_ip', '192.168.50.171')
+        self.declare_parameter('host_ip', '127.0.1.1')
         self.declare_parameter('host_port', 8000)
-        self.declare_parameter('controller_name', 'C_1')
+        self.declare_parameter('controller_name', 'controller_1')
         self.declare_parameter('topic', '')
-        self.declare_parameter('link_name', 'odom')
-        self.declare_parameter('child_link_name', 'controller_link')
+        self.declare_parameter('odom_frame', 'odom')
+        self.declare_parameter('controller_link', 'controller_link')
+        self.declare_parameter('buttons_topic', 'joy_inputs')
 
-        (self.host_ip, self.host_port, self.controller_name, self.link_name, self.child_link_name, self.topic) = self.get_parameters(
-            ['host_ip', 'host_port', 'controller_name', 'link_name', 'child_link_name', 'topic'])
+        (self.host_ip, self.host_port, self.controller_name, self.odom_frame, self.controller_link, self.topic, self.buttons_topic) = self.get_parameters(
+            ['host_ip', 'host_port', 'controller_name', 'odom_frame', 'controller_link', 'topic', 'buttons_topic'])
 
         topic = self.topic.get_parameter_value().string_value
         topic_name = self.controller_name.get_parameter_value().string_value + '/odom' if topic == "" else topic
         self.odom_pub = self.create_publisher(Odometry, topic_name,
             100)
-        self.joy_pub = self.create_publisher(Joy, "joy_inputs",
+        self.joy_pub = self.create_publisher(Joy, self.buttons_topic.get_parameter_value().string_value,
             100)
 
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -56,8 +57,8 @@ class ViveControllerNode(Node):
                 odom_msg = Odometry()
 
                 odom_msg.header.stamp = self.get_clock().now().to_msg()
-                odom_msg.header.frame_id = self.link_name.get_parameter_value().string_value
-                odom_msg.child_frame_id = self.child_link_name.get_parameter_value().string_value
+                odom_msg.header.frame_id = self.odom_frame.get_parameter_value().string_value
+                odom_msg.child_frame_id = self.controller_link.get_parameter_value().string_value
 
                 odom_msg.pose.pose.position.x = msg.x
                 odom_msg.pose.pose.position.y = msg.y
@@ -87,7 +88,7 @@ class ViveControllerNode(Node):
 
                 t.header.stamp = self.get_clock().now().to_msg()
                 t.header.frame_id = 'world'
-                t.child_frame_id = self.child_link_name.get_parameter_value().string_value
+                t.child_frame_id = self.controller_link.get_parameter_value().string_value
 
                 t.transform.translation.x = msg.x
                 t.transform.translation.y = msg.y
