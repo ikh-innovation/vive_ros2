@@ -1,7 +1,8 @@
 /**:
   ros__parameters:
     host_ip: "127.0.1.1"
-    host_port: 8000
+    controller_port: 8000
+    tracker_port: 8000
     tracker_name: "tracker_1"
     controller_name: "controller_1"
     topic: "" # if empty, topic name will default to /DEVICE_NAME/odom

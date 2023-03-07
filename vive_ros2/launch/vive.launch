@@ -12,11 +12,20 @@ def generate_launch_description():
         'params.yaml'
         )
 
+    node0 = Node(
+            package='vive_ros2',
+            namespace='vive',
+            executable='vive_tracker_node.py',
+            name='vive_tracker_server_interface',
+            arguments=[('__log_level:=debug')],
+            parameters=[config]
+        )
+    
     node1 = Node(
             package='vive_ros2',
             namespace='vive',
             executable='vive_controller_node.py',
-            name='vive_server_interface',
+            name='vive_controller_server_interface',
             arguments=[('__log_level:=debug')],
             parameters=[config]
         )
@@ -40,8 +49,10 @@ def generate_launch_description():
         )
     
 
+
     ld.add_action(node1)
     ld.add_action(node2)
     ld.add_action(node3)
+    ld.add_action(node0)
 
     return ld

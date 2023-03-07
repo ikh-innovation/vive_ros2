@@ -27,7 +27,7 @@ class VivePathCaptureServer : public rclcpp::Node
 {
 public:
   VivePathCaptureServer()
-  : Node("turtle_tf2_frame_listener")
+  : Node("VivePathCaptureServer")
   {
     // Declare and acquire parameters
     this->declare_parameter<std::string>("target_frame", "world");

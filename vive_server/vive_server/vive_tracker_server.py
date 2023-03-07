@@ -56,7 +56,7 @@ def construct_tracker_socket_msg(data: ViveDynamicObjectMessage) -> str:
     return json_data
 
 
-class ViveTrackerServer(Server):
+class ViveDeviceServer(Server):
     """
     Defines a UDP vive tracker server that constantly "shout out" messages at (HOST, PORT)
 
@@ -79,8 +79,8 @@ class ViveTrackerServer(Server):
             should_record: should record data or not
             output_file_path: output file's path
         """
-        super(ViveTrackerServer, self).__init__(port)
-        self.logger = logging.getLogger("ViveTrackerServer")
+        super(ViveDeviceServer, self).__init__(port)
+        self.logger = logging.getLogger("ViveDeviceServer")
         self.logger.addHandler(logging.handlers.QueueHandler(logging_queue))
         self.logger.setLevel(logging.INFO)
         self.pipe = pipe
@@ -110,7 +110,7 @@ class ViveTrackerServer(Server):
         self.output_file = self.output_file_path.open('w')
         self.buffer_length = buffer_length
 
-    def run(self):
+    def run(self, type):
         """
         Initialize a server that runs forever.
 
@@ -148,40 +148,46 @@ class ViveTrackerServer(Server):
             #     self.logger.info("Did not receive connection from client")
             # except Exception as e:
             #     self.logger.error(e)
+            if type == "tracker":
+                try:
+                    tracker_name, addr = self.socket.recvfrom(self.buffer_length)
+                    tracker_name = tracker_name.decode()
+                    tracker_key = self.resolve_name_to_key(tracker_name)
+                    if tracker_key in self.get_tracker_keys():
+                        message = self.poll_tracker(tracker_key=tracker_key)
+                        messages["state"][tracker_key] = message
+                        if message is not None:
+                            socket_message = construct_tracker_socket_msg(data=message)
+                            self.socket.sendto(socket_message.encode(), addr)
+                            if self.should_record:
+                                self.record(data=message)
+                    else:
+                        self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
 
-            try:
-                # tracker_name, addr = self.socket.recvfrom(self.buffer_length)
-                # tracker_name = tracker_name.decode()
-                # tracker_key = self.resolve_name_to_key(tracker_name)
-                # if tracker_key in self.get_tracker_keys():
-                #     message = self.poll_tracker(tracker_key=tracker_key)
-                #     messages["state"][tracker_key] = message
-                #     if message is not None:
-                #         socket_message = construct_tracker_socket_msg(data=message)
-                #         self.socket.sendto(socket_message.encode(), addr)
-                #         if self.should_record:
-                #             self.record(data=message)
-                # else:
-                #     self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
+                except socket.timeout:
+                    self.logger.info("Did not receive connection from client")
+                except Exception as e:
+                    self.logger.error(e)
+            else:
+                try:
+                    controller_name, addr = self.socket.recvfrom(self.buffer_length)
+                    controller_name = controller_name.decode()
+                    controller_key = self.resolve_name_to_key(controller_name)
+                    if controller_key in self.get_controller_keys():
+                        message = self.poll_controller(controller_key=controller_key)
+                        messages["state"][controller_key] = message
+                        if message is not None:
+                            socket_message = construct_controller_socket_msg(data=message)
+                            self.socket.sendto(socket_message.encode(), addr)
+                            if self.should_record:
+                                self.record(data=message)
+                    else:
+                        self.logger.error(f"Controller {controller_name} with key {controller_key} not found")
 
-                controller_name, addr = self.socket.recvfrom(self.buffer_length)
-                controller_name = controller_name.decode()
-                controller_key = self.resolve_name_to_key(controller_name)
-                if controller_key in self.get_controller_keys():
-                    message = self.poll_controller(controller_key=controller_key)
-                    messages["state"][controller_key] = message
-                    if message is not None:
-                        socket_message = construct_controller_socket_msg(data=message)
-                        self.socket.sendto(socket_message.encode(), addr)
-                        if self.should_record:
-                            self.record(data=message)
-                else:
-                    self.logger.error(f"Controller {controller_name} with key {controller_key} not found")
-
-            except socket.timeout:
-                self.logger.info("Did not receive connection from client")
-            except Exception as e:
-                self.logger.error(e)
+                except socket.timeout:
+                    self.logger.info("Did not receive connection from client")
+                except Exception as e:
+                    self.logger.error(e)
 
             # # See if any commands have been sent from the gui
             # while self.pipe.poll():
@@ -332,13 +338,13 @@ class ViveTrackerServer(Server):
         Polls controller message by name
 
         Note:
-            Server will attempt to reconnect if tracker name is not found.
+            Server will attempt to reconnect if controller name is not found.
 
         Args:
-            controller_key: the vive tracker message intended to poll
+            controller_key: the vive controller message intended to poll
 
         Returns:
-            ViveTrackerMessage if tracker is found, None otherwise.
+            ViveControllerMessage if controller is found, None otherwise.
         """
         controller = self.get_device(key=controller_key)
         if controller is not None:
@@ -635,16 +641,21 @@ class ViveTrackerServer(Server):
         self.output_file.write(recording_data + "\n")
 
 
-def run_server(port: int, pipe: Pipe, logging_queue: Queue, config: Path, use_gui: bool, should_record: bool = False):
-    vive_tracker_server = ViveTrackerServer(port=port, pipe=pipe, logging_queue=logging_queue, use_gui=use_gui,
+def run_tracker_server(port: int, pipe: Pipe, logging_queue: Queue, config: Path, use_gui: bool, should_record: bool = False):
+    vive_tracker_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue, use_gui=use_gui,
                                             config_path=config, should_record=should_record)
-    vive_tracker_server.run()
+    vive_tracker_server.run("tracker")
 
+def run_controller_server(port: int, pipe: Pipe, logging_queue: Queue, config: Path, use_gui: bool, should_record: bool = False):
+    vive_controller_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue, use_gui=use_gui,
+                                            config_path=config, should_record=should_record)
+    vive_controller_server.run("controller")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Vive tracker server')
+    parser = argparse.ArgumentParser(description='Vive Device server')
     parser.add_argument('--headless', default=False, help='if true will not run the gui')
-    parser.add_argument('--port', default=8000, help='port to broadcast tracker data on')
+    parser.add_argument('--controller_port', default=8000, help='port to broadcast controller data on')
+    parser.add_argument('--tracker_port', default=8001, help='port to broadcast tracker data on')
     parser.add_argument('--config', default=f"~/vive_ros2/config.yml",
                         help='tracker configuration file')
     args = parser.parse_args()
@@ -655,19 +666,26 @@ if __name__ == "__main__":
     string_formatter = logging.Formatter(fmt='%(asctime)s|%(name)s|%(levelname)s|%(message)s', datefmt="%H:%M:%S")
 
     if args.headless:
-        p = Process(target=run_server, args=(args.port, server_conn, logger_queue, config, False,))
-        p.start()
+        p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
+        p1.start()
+        p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
+        p2.start()
         try:
             # This should be updated to be a bit cleaner
             while True:
                 print(string_formatter.format(logger_queue.get()))
         finally:
-            p.kill()
+            p1.kill()
+            p2.kill()
     else:
-        p = Process(target=run_server, args=(args.port, server_conn, logger_queue, config, True,))
-        p.start()
+        p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
+        p1.start()
+        p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
+        p2.start()
         try:
             gui = GuiManager(gui_conn, logger_queue)
             gui.start()
         finally:
-            p.kill()
+            p1.kill()
+            p2.kill()
+
