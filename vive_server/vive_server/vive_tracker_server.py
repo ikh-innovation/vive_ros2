@@ -18,7 +18,6 @@ import time
 import os
 
 from base_server import Server
-from gui import GuiManager
 from models import ViveDynamicObjectMessage, ViveDynamicControllerMessage, ViveStaticObjectMessage, Configuration
 from triad_openvr import TriadOpenVR
 
@@ -128,26 +127,8 @@ class ViveDeviceServer(Server):
         self.logger.info("Connected VR devices: \n###########\n" + str(self.triad_openvr) + "###########")
         # Main server loop
         while True:
+            self.triad_openvr.poll_vr_events()
             messages = {"state": {}}
-            # # Transmit data over the network
-            # try:
-            #     tracker_name, addr = self.socket.recvfrom(self.buffer_length)
-            #     tracker_name = tracker_name.decode()
-            #     tracker_key = self.resolve_name_to_key(tracker_name)
-            #     if tracker_key in self.get_tracker_keys():
-            #         message = self.poll_tracker(tracker_key=tracker_key)
-            #         messages["state"][tracker_key] = message
-            #         if message is not None:
-            #             socket_message = construct_socket_msg(data=message)
-            #             self.socket.sendto(socket_message.encode(), addr)
-            #             if self.should_record:
-            #                 self.record(data=message)
-            #     else:
-            #         self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
-            # except socket.timeout:
-            #     self.logger.info("Did not receive connection from client")
-            # except Exception as e:
-            #     self.logger.error(e)
             if type == "tracker":
                 try:
                     tracker_name, addr = self.socket.recvfrom(self.buffer_length)
@@ -165,7 +146,7 @@ class ViveDeviceServer(Server):
                         self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
 
                 except socket.timeout:
-                    self.logger.info("Did not receive connection from client")
+                    self.logger.info("Did not receive connection for tracker from client")
                 except Exception as e:
                     self.logger.error(e)
             else:
@@ -185,42 +166,9 @@ class ViveDeviceServer(Server):
                         self.logger.error(f"Controller {controller_name} with key {controller_key} not found")
 
                 except socket.timeout:
-                    self.logger.info("Did not receive connection from client")
+                    self.logger.info("Did not receive connection for controller from client")
                 except Exception as e:
                     self.logger.error(e)
-
-            # # See if any commands have been sent from the gui
-            # while self.pipe.poll():
-            #     data = self.pipe.recv()
-            #     if "config" in data:
-            #         self.config = data["config"]
-            #         self.logger.info(f"Configuration updated")
-            #     if "save" in data:
-            #         self.save_config(data["save"])
-            #     if "refresh" in data:
-            #         self.logger.info("Refreshing system")
-            #         self.reconnect_triad_vr()
-            #     if "calibrate" in data:
-            #         self.calibrate_world_frame(*data["calibrate"])
-
-            # # Update the GUI
-            # if self.use_gui:
-            #     # Make sure all trackers are shown in the GUI regardless of if they are being subscribed to
-            #     for tracker_key in self.get_tracker_keys():
-            #         if tracker_key not in messages["state"]:
-            #             message = self.poll_tracker(tracker_key=tracker_key)
-            #             if message is not None:
-            #                 messages["state"][tracker_key] = message
-            #     for reference_key in self.get_tracking_reference_keys():
-            #         if reference_key not in messages["state"]:
-            #             message = self.poll_tracking_reference(tracking_reference_key=reference_key)
-            #             if message is not None:
-            #                 messages["state"][reference_key] = message
-
-            #     # Always send the current configuration to ensure synchronization with GUI
-            #     messages["config"] = self.config
-
-            #     self.pipe.send(messages)
 
     def resolve_name_to_key(self, name):
         """
@@ -239,77 +187,6 @@ class ViveDeviceServer(Server):
                 return keys[i]
         return name
 
-    def clear_calibration(self):
-        self.config.Twv_x = float(0)
-        self.config.Twv_y = float(0)
-        self.config.Twv_z = float(0)
-        self.config.Twv_qx = float(0)
-        self.config.Twv_qy = float(0)
-        self.config.Twv_qz = float(0)
-        self.config.Twv_qw = float(1)
-
-    def set_config_calibration_from_matrix(self, T):
-        q = transform.Rotation.from_matrix(T[:3, :3]).as_quat()  # x y z w
-        t = T[:3, 3]
-
-        self.config.Twv_x = float(t[0])
-        self.config.Twv_y = float(t[1])
-        self.config.Twv_z = float(t[2])
-        self.config.Twv_qx = float(q[0])
-        self.config.Twv_qy = float(q[1])
-        self.config.Twv_qz = float(q[2])
-        self.config.Twv_qw = float(q[3])
-
-    def calibrate_world_frame(self, origin: str, pos_x: str, pos_y: str, duration: float = 2.0):
-
-        self.clear_calibration()
-
-        origin_key = self.resolve_name_to_key(origin)
-        pos_x_key = self.resolve_name_to_key(pos_x)
-        pos_y_key = self.resolve_name_to_key(pos_y)
-
-        origin_history = []
-        pos_x_history = []
-        pos_y_history = []
-        start = time.time()
-        while time.time() - start < duration:
-            origin_message = self.poll_tracker(origin_key)
-            pos_x_message = self.poll_tracker(pos_x_key)
-            pos_y_message = self.poll_tracker(pos_y_key)
-
-            origin_history.append(np.array([origin_message.x, origin_message.y, origin_message.z]))
-            pos_x_history.append(np.array([pos_x_message.x, pos_x_message.y, pos_x_message.z]))
-            pos_y_history.append(np.array([pos_y_message.x, pos_y_message.y, pos_y_message.z]))
-
-        avg_origin = np.average(np.array(origin_history), axis=0)
-        avg_pos_x = np.average(np.array(pos_x_history), axis=0)
-        avg_pos_y = np.average(np.array(pos_y_history), axis=0)
-
-        vx = avg_pos_x - avg_origin
-        vy = avg_pos_y - avg_origin
-
-        vx /= np.linalg.norm(vx)
-        vy /= np.linalg.norm(vy)
-        vz = np.cross(vx, vy)
-
-        m_rot = np.array([[*vx, 0],
-                          [*vy, 0],
-                          [*vz, 0],
-                          [0, 0, 0, 1]])
-
-        m_pos = np.array([[1, 0, 0, -avg_origin[0]],
-                          [0, 1, 0, -avg_origin[1]],
-                          [0, 0, 1, -avg_origin[2]],
-                          [0, 0, 0, 1]])
-
-        self.set_config_calibration_from_matrix(m_rot @ m_pos)
-
-    def save_config(self, path: Path = None):
-        path = path or self.config_path  # default to self.config_path is path is None
-        self.logger.info(f"Saving configuration to {path}")
-        with open(path, 'w') as f:
-            yaml.dump(self.config.dict(), f)
-        self.logger.info(f"Configuration saved successfully!")
 
     def poll_tracker(self, tracker_key) -> Optional[ViveDynamicObjectMessage]:
         """
@@ -653,7 +530,6 @@ def run_controller_server(port: int, pipe: Pipe, logging_queue: Queue, config: P
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Vive Device server')
-    parser.add_argument('--headless', default=False, help='if true will not run the gui')
     parser.add_argument('--controller_port', default=8000, help='port to broadcast controller data on')
     parser.add_argument('--tracker_port', default=8001, help='port to broadcast tracker data on')
     parser.add_argument('--config', default=f"~/vive_ros2/config.yml",
@@ -665,27 +541,17 @@ if __name__ == "__main__":
     config = Path(args.config).expanduser()
     string_formatter = logging.Formatter(fmt='%(asctime)s|%(name)s|%(levelname)s|%(message)s', datefmt="%H:%M:%S")
 
-    if args.headless:
-        p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
-        p1.start()
-        p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
-        p2.start()
-        try:
-            # This should be updated to be a bit cleaner
-            while True:
-                print(string_formatter.format(logger_queue.get()))
-        finally:
-            p1.kill()
-            p2.kill()
-    else:
-        p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
-        p1.start()
-        p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
-        p2.start()
-        try:
-            gui = GuiManager(gui_conn, logger_queue)
-            gui.start()
-        finally:
-            p1.kill()
-            p2.kill()
+    
+    p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
+    p1.start()
+    p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
+    p2.start()
+    try:
+        # This should be updated to be a bit cleaner
+        while True:
+            print(string_formatter.format(logger_queue.get()))
+    finally:
+        p1.kill()
+        p2.kill()
+    
 
