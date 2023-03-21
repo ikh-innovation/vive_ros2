@@ -20,27 +20,21 @@ class ViveControllerNode(Node):
     def __init__(self):
         super().__init__('vive_controller_node')
         self.declare_parameter('host_ip', '127.0.1.1')
-        self.declare_parameter('host_port', 8000)
+        self.declare_parameter('controller_port', 8000)
         self.declare_parameter('controller_name', 'controller_1')
-        self.declare_parameter('topic', '')
-        self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('controller_link', 'controller_link')
         self.declare_parameter('buttons_topic', 'joy_inputs')
 
-        (self.host_ip, self.host_port, self.controller_name, self.odom_frame, self.controller_link, self.topic, self.buttons_topic) = self.get_parameters(
-            ['host_ip', 'host_port', 'controller_name', 'odom_frame', 'controller_link', 'topic', 'buttons_topic'])
+        (self.host_ip, self.controller_port, self.controller_name, self.controller_link, self.buttons_topic) = self.get_parameters(
+            ['host_ip', 'controller_port', 'controller_name', 'controller_link', 'buttons_topic'])
 
-        topic = self.topic.get_parameter_value().string_value
-        topic_name = self.controller_name.get_parameter_value().string_value + '/odom' if topic == "" else topic
-        self.odom_pub = self.create_publisher(Odometry, topic_name,
-            100)
         self.joy_pub = self.create_publisher(Joy, self.buttons_topic.get_parameter_value().string_value,
             100)
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
         client = ViveControllerClient(host=self.host_ip.get_parameter_value().string_value,
-                                   port=self.host_port.get_parameter_value().integer_value,
+                                   port=self.controller_port.get_parameter_value().integer_value,
                                    controller_name=self.controller_name.get_parameter_value().string_value,
                                    should_record=False)
 
@@ -53,29 +47,6 @@ class ViveControllerNode(Node):
             sum = 0 
             while rclpy.ok():
                 msg = self.message_queue.get()
-
-                odom_msg = Odometry()
-
-                odom_msg.header.stamp = self.get_clock().now().to_msg()
-                odom_msg.header.frame_id = self.odom_frame.get_parameter_value().string_value
-                odom_msg.child_frame_id = self.controller_link.get_parameter_value().string_value
-
-                odom_msg.pose.pose.position.x = msg.x
-                odom_msg.pose.pose.position.y = msg.y
-                odom_msg.pose.pose.position.z = msg.z
-
-                odom_msg.pose.pose.orientation.x = msg.qx
-                odom_msg.pose.pose.orientation.y = msg.qy
-                odom_msg.pose.pose.orientation.z = msg.qz
-                odom_msg.pose.pose.orientation.w = msg.qw
-
-                odom_msg.twist.twist.linear.x = msg.vel_x
-                odom_msg.twist.twist.linear.y = msg.vel_y
-                odom_msg.twist.twist.linear.z = msg.vel_z
-
-                odom_msg.twist.twist.angular.x = msg.p
-                odom_msg.twist.twist.angular.y = msg.q
-                odom_msg.twist.twist.angular.z = msg.r
                 
                 joy_msg = Joy()
                 joy_msg.header.stamp = self.get_clock().now().to_msg()
@@ -87,7 +58,7 @@ class ViveControllerNode(Node):
                 t = TransformStamped() 
 
                 t.header.stamp = self.get_clock().now().to_msg()
-                t.header.frame_id = 'world'
+                t.header.frame_id = 'vive_world'
                 t.child_frame_id = self.controller_link.get_parameter_value().string_value
 
                 t.transform.translation.x = msg.x
@@ -109,8 +80,6 @@ class ViveControllerNode(Node):
                 #     sum = sum + 1
 
                 
-
-                self.odom_pub.publish(odom_msg)
                 self.joy_pub.publish(joy_msg)
 
         finally:
