@@ -64,10 +64,7 @@ class ViveDeviceServer(Server):
 
     """
 
-    def __init__(self, port: int, pipe: Pipe, logging_queue: Queue,
-                 config_path: Path = Path(f"~/vive_ros2/config.yml").expanduser(),
-                 use_gui: bool = False, buffer_length: int = 1024, should_record: bool = False,
-                 output_file_path: Path = Path(f"~/vive_ros2/data/RFS_track.txt").expanduser()):
+    def __init__(self, port: int, pipe: Pipe, logging_queue: Queue, buffer_length: int = 1024):
         """
         Initialize socket and OpenVR
         
@@ -75,38 +72,18 @@ class ViveDeviceServer(Server):
             port: desired port to open
             logging_queue: handler with where to send logs
             buffer_length: maximum buffer (tracker_name) that it can listen to at once
-            should_record: should record data or not
-            output_file_path: output file's path
         """
         super(ViveDeviceServer, self).__init__(port)
         self.logger = logging.getLogger("ViveDeviceServer")
         self.logger.addHandler(logging.handlers.QueueHandler(logging_queue))
         self.logger.setLevel(logging.INFO)
         self.pipe = pipe
-        self.use_gui = use_gui
-        self.config_path = config_path
         self.config = Configuration()
-
-        # load the configuration if one exists otherwise create one and set defaults
-        if not self.config_path.exists():
-            os.makedirs(os.path.dirname(self.config_path))
-            with open(self.config_path, 'w') as f:
-                yaml.dump(self.config.dict(), f)
-        else:
-            with open(self.config_path, 'r') as f:
-                data = yaml.load(f, Loader=yaml.FullLoader)
-                self.config = self.config.parse_obj(data)
 
         self.socket = self.initialize_socket()
         self.triad_openvr: Optional[TriadOpenVR] = None
         self.reconnect_triad_vr()
 
-        self.should_record = should_record
-        self.output_file_path = output_file_path
-        self.output_file = None
-        if not self.output_file_path.exists():
-            self.output_file_path.parent.mkdir(parents=True, exist_ok=True)
-        self.output_file = self.output_file_path.open('w')
         self.buffer_length = buffer_length
 
     def run(self, type):
@@ -140,11 +117,8 @@ class ViveDeviceServer(Server):
                         if message is not None:
                             socket_message = construct_tracker_socket_msg(data=message)
                             self.socket.sendto(socket_message.encode(), addr)
-                            if self.should_record:
-                                self.record(data=message)
                     else:
                         self.logger.error(f"Tracker {tracker_name} with key {tracker_key} not found")
-
                 except socket.timeout:
                     self.logger.info("Did not receive connection for tracker from client")
                 except Exception as e:
@@ -160,11 +134,8 @@ class ViveDeviceServer(Server):
                         if message is not None:
                             socket_message = construct_controller_socket_msg(data=message)
                             self.socket.sendto(socket_message.encode(), addr)
-                            if self.should_record:
-                                self.record(data=message)
                     else:
                         self.logger.error(f"Controller {controller_name} with key {controller_key} not found")
-
                 except socket.timeout:
                     self.logger.info("Did not receive connection for controller from client")
                 except Exception as e:
@@ -186,7 +157,6 @@ class ViveDeviceServer(Server):
                         return device_key
                 return keys[i]
         return name
-
 
     def poll_tracker(self, tracker_key) -> Optional[ViveDynamicObjectMessage]:
         """
@@ -266,23 +236,6 @@ class ViveDeviceServer(Server):
         """
         return self.triad_openvr.devices.get(key, None)
 
-    def get_rot_vw(self) -> transform.Rotation:
-        """Get the rotation from the vive frame to the world frame"""
-        return transform.Rotation.from_quat([self.config.Twv_qx,
-                                             self.config.Twv_qy,
-                                             self.config.Twv_qz,
-                                             self.config.Twv_qw])
-
-    def get_rot_wv(self) -> transform.Rotation:
-        """Get the rotation from the world frame to the vive frame"""
-        return transform.Rotation.from_quat([self.config.Twv_qx,
-                                             self.config.Twv_qy,
-                                             self.config.Twv_qz,
-                                             self.config.Twv_qw]).inverse()
-
-    def translate_to_origin(self, x, y, z):
-        return x + self.config.Twv_x, y + self.config.Twv_y, z + self.config.Twv_z
-
     def create_dynamic_message(self, device, device_key) -> Optional[ViveDynamicObjectMessage]:
         """
         Create dynamic object message given device and device name
@@ -299,25 +252,9 @@ class ViveDeviceServer(Server):
 
         """
         try:
-            _, _, _, r, p, y = device.get_pose_euler()
             x, y, z, qw, qx, qy, qz = device.get_pose_quaternion()
-
             vel_x, vel_y, vel_z = device.get_velocity()
             p, q, r = device.get_angular_velocity()
-
-            # handle world transform
-            rot_vw = self.get_rot_vw()
-            x, y, z = rot_vw.apply([x, y, z])
-            x, y, z = self.translate_to_origin(x, y, z)
-
-            # bring velocities into the local device frame such that positive x is pointing out the USB port
-            rot_lv = transform.Rotation.from_quat([qx, qy, qz, qw]) * transform.Rotation.from_matrix([[0, 1, 0],
-                                                                                                      [1, 0, 0],
-                                                                                                      [0, 0, -1]])
-            vel_x, vel_y, vel_z = rot_lv.apply([vel_x, vel_y, vel_z], inverse=True)
-            p, q, r = rot_lv.apply([p, q, r], inverse=True)
-
-            qx, qy, qz, qw = rot_lv.inv().as_quat()
 
             serial = device.get_serial()
             device_name = device_key if serial not in self.config.name_mappings else self.config.name_mappings[serial]
@@ -354,25 +291,9 @@ class ViveDeviceServer(Server):
 
         """
         try:
-            _, _, _, r, p, y = device.get_pose_euler()
             x, y, z, qw, qx, qy, qz = device.get_pose_quaternion()
-
             vel_x, vel_y, vel_z = device.get_velocity()
             p, q, r = device.get_angular_velocity()
-
-            # handle world transform
-            rot_vw = self.get_rot_vw()
-            x, y, z = rot_vw.apply([x, y, z])
-            x, y, z = self.translate_to_origin(x, y, z)
-
-            # bring velocities into the local device frame such that positive x is pointing out the USB port
-            rot_lv = transform.Rotation.from_quat([qx, qy, qz, qw]) * transform.Rotation.from_matrix([[0, 1, 0],
-                                                                                                      [1, 0, 0],
-                                                                                                      [0, 0, -1]])
-            vel_x, vel_y, vel_z = rot_lv.apply([vel_x, vel_y, vel_z], inverse=True)
-            p, q, r = rot_lv.apply([p, q, r], inverse=True)
-
-            qx, qy, qz, qw = rot_lv.inv().as_quat()
 
             serial = device.get_serial()
             device_name = device_key if serial not in self.config.name_mappings else self.config.name_mappings[serial]
@@ -420,8 +341,6 @@ class ViveDeviceServer(Server):
         """
         try:
             x, y, z, qw, qx, qy, qz = device.get_pose_quaternion()
-            x, y, z = self.get_rot_vw().apply([x, y, z])
-            x, y, z = self.translate_to_origin(x, y, z)
             serial = device.get_serial()
             device_name = device_key if serial not in self.config.name_mappings else self.config.name_mappings[serial]
             message = ViveStaticObjectMessage(valid=True, x=x, y=y, z=z,
@@ -501,50 +420,27 @@ class ViveDeviceServer(Server):
                         result.append(device_name)
         return result
 
-    def record(self, data: ViveDynamicObjectMessage):
-        """
-        Record the current data
-
-        Args:
-            data: current ViveTrackerMessage to record
-
-        Returns:
-            None
-        """
-        x, y, z, qw, qx, qy, qz = data.x, data.y, data.z, data.qw, data.qx, data.qy, data.qz
-        recording_data = f"{x}, {y},{z},{qw},{qx},{qy},{qz}"
-        m = f"Recording: {recording_data}"
-        self.logger.info(m)
-        self.output_file.write(recording_data + "\n")
-
-
-def run_tracker_server(port: int, pipe: Pipe, logging_queue: Queue, config: Path, use_gui: bool, should_record: bool = False):
-    vive_tracker_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue, use_gui=use_gui,
-                                            config_path=config, should_record=should_record)
+def run_tracker_server(port: int, pipe: Pipe, logging_queue: Queue):
+    vive_tracker_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue)
     vive_tracker_server.run("tracker")
 
-def run_controller_server(port: int, pipe: Pipe, logging_queue: Queue, config: Path, use_gui: bool, should_record: bool = False):
-    vive_controller_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue, use_gui=use_gui,
-                                            config_path=config, should_record=should_record)
+def run_controller_server(port: int, pipe: Pipe, logging_queue: Queue):
+    vive_controller_server = ViveDeviceServer(port=port, pipe=pipe, logging_queue=logging_queue)
     vive_controller_server.run("controller")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Vive Device server')
     parser.add_argument('--controller_port', default=8000, help='port to broadcast controller data on')
     parser.add_argument('--tracker_port', default=8001, help='port to broadcast tracker data on')
-    parser.add_argument('--config', default=f"~/vive_ros2/config.yml",
-                        help='tracker configuration file')
     args = parser.parse_args()
 
     logger_queue = Queue()
-    gui_conn, server_conn = Pipe()
-    config = Path(args.config).expanduser()
+    server_conn = Pipe()
     string_formatter = logging.Formatter(fmt='%(asctime)s|%(name)s|%(levelname)s|%(message)s', datefmt="%H:%M:%S")
-
     
-    p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue, config, False,))
+    p1 = Process(target=run_tracker_server, args=(args.tracker_port, server_conn, logger_queue))
     p1.start()
-    p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue, config, False,))
+    p2 = Process(target=run_controller_server, args=(args.controller_port, server_conn, logger_queue))
     p2.start()
     try:
         # This should be updated to be a bit cleaner

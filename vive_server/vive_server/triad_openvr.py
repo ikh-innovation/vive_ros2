@@ -26,16 +26,39 @@ def convert_to_euler(pose_mat):
 
 # Convert the standard 3x4 position/rotation matrix to a x,y,z location and the appropriate Quaternion
 def convert_to_quaternion(pose_mat):
-    # Per issue #2, adding a abs() so that sqrt only results in real numbers
-    r_w = math.sqrt(abs(1 + pose_mat[0][0] + pose_mat[1][1] + pose_mat[2][2])) / 2
-    r_x = (pose_mat[2][1] - pose_mat[1][2]) / (4 * r_w)
-    r_y = (pose_mat[0][2] - pose_mat[2][0]) / (4 * r_w)
-    r_z = (pose_mat[1][0] - pose_mat[0][1]) / (4 * r_w)
-
     x = pose_mat[0][3]
     y = pose_mat[1][3]
     z = pose_mat[2][3]
-    return [x, y, z, r_w, r_x, r_y, r_z]
+
+    q = [0,0,0,1]
+    trace = pose_mat[0][0] + pose_mat[1][1] + pose_mat[2][2]
+    
+    if(trace>0.0):
+        s = math.sqrt(trace + 1.0)
+        q[3] = s * 0.5
+        s = 0.5 / s
+
+        q[0] = (pose_mat[2][1] - pose_mat[1][2])*s
+        q[1] = (pose_mat[0][2] - pose_mat[2][0])*s
+        q[2] = (pose_mat[1][0] - pose_mat[0][1])*s
+    else:
+        i = 0
+        if (pose_mat[1][1] > pose_mat[0][0]):
+            i = 1
+        if (pose_mat[2][2] > pose_mat[i][i]):
+            i = 2
+        j = (i+1)%3
+        k = (j+1)%3
+
+        s = math.sqrt(pose_mat[i][i] - pose_mat[j][j] - pose_mat[k][k] + 1.0)
+        q[i] = s*0.5
+        s = 0.5/s
+
+        q[3] = (pose_mat[k][j] - pose_mat[j][k])*s
+        q[j] = (pose_mat[j][i] + pose_mat[i][j])*s
+        q[k] = (pose_mat[k][i] + pose_mat[i][k])*s
+    
+    return [x, y, z, q[3], q[0], q[1], q[2]]
 
 
 # Define a class to make it easy to append pose matricies and convert to both Euler and Quaternion for plotting

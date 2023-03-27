@@ -3,15 +3,6 @@ import scipy.spatial.transform as transform
 
 
 class Configuration(BaseModel):
-    # Transform from world to vive
-    Twv_x: float = Field(default=0)
-    Twv_y: float = Field(default=0)
-    Twv_z: float = Field(default=0)
-    Twv_qx: float = Field(default=0)
-    Twv_qy: float = Field(default=0)
-    Twv_qz: float = Field(default=0)
-    Twv_qw: float = Field(default=1)
-
     # Name mappings from serial to device name
     name_mappings: dict = Field(default={})
 
