@@ -1,5 +1,4 @@
-
-bool data # for capture start/stop
+bool data # for capture start/stop or False for reset previous, true for reset all
 ---
 string message # informational
 nav_msgs/Path[] segments # list of captured segments

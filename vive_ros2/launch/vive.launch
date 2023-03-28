@@ -39,20 +39,20 @@ def generate_launch_description():
             parameters=[config]
         )
 
-    node3 = Node(
-            package='vive_ros2',
-            namespace='vive',
-            executable='vive_capture_service_listener',
-            name='controller_client',
-            arguments=[('__log_level:=debug')],
-            parameters=[config]
-        )
+    # node3 = Node(
+    #         package='vive_ros2',
+    #         namespace='vive',
+    #         executable='vive_capture_service_listener',
+    #         name='controller_client',
+    #         arguments=[('__log_level:=debug')],
+    #         parameters=[config]
+    #     )
     
 
     ld.add_action(node0)
     ld.add_action(node1)
     ld.add_action(node2)
-    ld.add_action(node3)
+    # ld.add_action(node3)
 
 
     return ld

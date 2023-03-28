@@ -11,7 +11,6 @@
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
 #include "vive_ros2/srv/vive_path_capture.hpp"
-#include "vive_ros2/srv/vive_path_reset.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -30,10 +29,10 @@ public:
   : Node("VivePathCaptureServer")
   {
     // Declare and acquire parameters
-    this->declare_parameter<std::string>("target_frame", "world");
-    this->declare_parameter<std::string>("controller_link", "controller_link");
-    target_frame_ = this->get_parameter("target_frame").get_parameter_value().get<std::string>();
-    controller_frame_ = this->get_parameter("controller_link").get_parameter_value().get<std::string>();
+    this->declare_parameter<std::string>("capture_origin_frame", "base_link");
+    this->declare_parameter<std::string>("capture_tip_frame", "controller_tip_reversed");
+    target_frame_ = this->get_parameter("capture_origin_frame").get_parameter_value().get<std::string>();
+    controller_frame_ = this->get_parameter("capture_tip_frame").get_parameter_value().get<std::string>();
 
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -44,18 +43,13 @@ public:
     // Create a publisher for path markers
     marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/paths", 10);
 
-    ServiceServer();
-    CaptureLoop();
-  }
-
-  void ServiceServer(){
     //Create a service server for path capturing
     capture_server_ = this->create_service<vive_ros2::srv::VivePathCapture>("/vive_pose_capture", std::bind(&VivePathCaptureServer::PoseCaptureCallback,this,
       std::placeholders::_1,
       std::placeholders::_2));
-    
+
     //Create a service server for path reset
-    reset_server_ = this->create_service<vive_ros2::srv::VivePathReset>("/vive_pose_reset", std::bind(&VivePathCaptureServer::ResetCaptureCallback,this,
+    reset_server_ = this->create_service<vive_ros2::srv::VivePathCapture>("/vive_pose_reset", std::bind(&VivePathCaptureServer::ResetCaptureCallback,this,
       std::placeholders::_1,
       std::placeholders::_2));
   }
@@ -77,13 +71,10 @@ public:
         geometry_msgs::msg::TransformStamped t;
         // Look up for the transformation between target and source frames
         try {
-          t = tf_buffer_->lookupTransform(
-            fromFrameRel, toFrameRel,
-            tf2::TimePointZero);
-        } catch (const tf2::TransformException & ex) {
-          RCLCPP_INFO(
-            this->get_logger(), "Could not transform %s to %s: %s",
-            toFrameRel.c_str(), fromFrameRel.c_str(), ex.what());
+          t = tf_buffer_->lookupTransform(fromFrameRel, toFrameRel, tf2::TimePointZero);
+        } 
+        catch (const tf2::TransformException & ex) {
+          RCLCPP_INFO(this->get_logger(), "Could not transform %s to %s: %s", toFrameRel.c_str(), fromFrameRel.c_str(), ex.what());
           return;
         }
         pose.header.stamp = this->get_clock()->now() ;
@@ -114,8 +105,7 @@ private:
   void PoseCaptureCallback(const std::shared_ptr<vive_ros2::srv::VivePathCapture::Request>  request,
                                  std::shared_ptr<vive_ros2::srv::VivePathCapture::Response> response){
     capture_on = request->data ;
-    current_segment.header.frame_id = target_frame_ ;
-    
+    current_segment.header.frame_id = target_frame_ ; 
 
     std::random_device rd; 
     std::mt19937 gen(rd()); 
@@ -154,16 +144,13 @@ private:
       segments.push_back(current_segment);
       current_segment = {};
       marker_array_.markers.push_back(marker_);
-      // rclcpp::sleep_for(1s);
       marker_publisher_->publish(marker_array_);
-      // rclcpp::sleep_for(1s);
-
     }
     response->segments = segments; 
   }
 
-  void ResetCaptureCallback(const std::shared_ptr<vive_ros2::srv::VivePathReset::Request>  request,
-                                 std::shared_ptr<vive_ros2::srv::VivePathReset::Response> response){
+  void ResetCaptureCallback(const std::shared_ptr<vive_ros2::srv::VivePathCapture::Request>  request,
+                                 std::shared_ptr<vive_ros2::srv::VivePathCapture::Response> response){
     reset_flag = request->data ;
     current_segment.header.frame_id = target_frame_ ;
     if (reset_flag){
@@ -209,7 +196,7 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
   rclcpp::Service<vive_ros2::srv::VivePathCapture>::SharedPtr capture_server_;
-  rclcpp::Service<vive_ros2::srv::VivePathReset>::SharedPtr reset_server_;
+  rclcpp::Service<vive_ros2::srv::VivePathCapture>::SharedPtr reset_server_;
   
   // path stuff
   std::vector<nav_msgs::msg::Path> segments {}; 
@@ -238,7 +225,8 @@ private:
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  VivePathCaptureServer new_server ; 
+  VivePathCaptureServer Server;
+  Server.CaptureLoop(); 
   rclcpp::shutdown();
   return 0;
 }

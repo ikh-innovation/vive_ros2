@@ -37,7 +37,6 @@ install(DIRECTORY
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/VivePathCapture.srv"
-  "srv/VivePathReset.srv"
   DEPENDENCIES nav_msgs # Add packages that above messages depend on
 )
 

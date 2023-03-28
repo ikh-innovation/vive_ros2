@@ -31,8 +31,7 @@ class ViveTrackerNode(Node):
 
         client = ViveTrackerClient(host=self.host_ip.get_parameter_value().string_value,
                                    port=self.tracker_port.get_parameter_value().integer_value,
-                                   tracker_name=self.tracker_name.get_parameter_value().string_value,
-                                   should_record=False)
+                                   tracker_name=self.tracker_name.get_parameter_value().string_value)
 
         self.message_queue = Queue()
         self.kill_thread = Event()

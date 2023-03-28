@@ -28,10 +28,7 @@ class ViveTrackerClient:
     multiple vive tracker can be used at the same time by initializing multiple clients with different `tracker_name`
     """
 
-    def __init__(self, host: str, port: int, tracker_name: str,
-                 time_out: float = 1, buffer_length: int = 1024,
-                 should_record: bool = False,
-                 output_file_path: Path = Path(expanduser("~") + "/vive_ros2/data/RFS_Track.txt")):
+    def __init__(self, host: str, port: int, tracker_name: str, time_out: float = 1, buffer_length: int = 1024):
         """
 
         Args:
@@ -52,14 +49,6 @@ class ViveTrackerClient:
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 20)
         self.socket.settimeout(self.time_out)
         self.latest_tracker_message: Optional[ViveDynamicObjectMessage] = None
-        self.should_record = should_record
-        self.output_file_path = output_file_path
-        self.output_file = None
-        if self.should_record:
-            if self.output_file_path.parent.exists():
-                self.output_file_path.parent.mkdir(exist_ok=True, parents=True)
-            self.output_file = self.output_file_path.open('w')
-        self.count = 0
         self.logger = logging.getLogger(f"Vive Tracker Client [{self.tracker_name}]")
         self.logger.info("Tracker Initialized")
 
@@ -85,15 +74,6 @@ class ViveTrackerClient:
                 parsed_message, status = self.parse_message(data.decode())
                 if status:
                     self.update_latest_tracker_message(parsed_message=parsed_message)
-                    if self.should_record:
-                        if self.count % 10 == 0:
-                            self.output_file.write(f'{self.latest_tracker_message.x},'
-                                                   f'{self.latest_tracker_message.y},'
-                                                   f'{self.latest_tracker_message.z},'
-                                                   f'{self.latest_tracker_message.roll},'
-                                                   f'{self.latest_tracker_message.pitch},'
-                                                   f'{self.latest_tracker_message.yaw}\n')
-                    self.count += 1
                 else:
                     self.logger.error(f"Failed to parse incoming message [{data.decode()}]")
             except socket.timeout:
@@ -129,15 +109,6 @@ class ViveTrackerClient:
                 if status:
                     self.update_latest_tracker_message(parsed_message=parsed_message)
                     queue.put(self.latest_tracker_message)
-                    if self.should_record:
-                        if self.count % 10 == 0:
-                            self.output_file.write(f'{self.latest_tracker_message.x},'
-                                                   f'{self.latest_tracker_message.y},'
-                                                   f'{self.latest_tracker_message.z},'
-                                                   f'{self.latest_tracker_message.roll},'
-                                                   f'{self.latest_tracker_message.pitch},'
-                                                   f'{self.latest_tracker_message.yaw}\n')
-                    self.count += 1
                 else:
                     self.logger.error(f"Failed to parse incoming message [{data.decode()}]")
             except socket.timeout:
@@ -159,8 +130,6 @@ class ViveTrackerClient:
 
         """
         self.socket.close()
-        if self.output_file is not None:
-            self.output_file.close()
 
     def update_latest_tracker_message(self, parsed_message):
         """
@@ -237,5 +206,5 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s|%(name)s|%(levelname)s|%(message)s',
                         datefmt="%H:%M:%S", level=logging.DEBUG if args.debug is True else logging.INFO)
     HOST, PORT = "127.0.0.1", 8000
-    client = ViveTrackerClient(host=HOST, port=PORT, tracker_name="tracker_1", should_record=args.collect)
+    client = ViveTrackerClient(host=HOST, port=PORT, tracker_name="tracker_1")
     client.update()

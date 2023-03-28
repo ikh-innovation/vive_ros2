@@ -8,3 +8,6 @@
     tracker_link: "vive_tracker_link"
     controller_link: "vive_controller_link"
     buttons_topic: "joy_inputs"
+    vive_world_frame: "vive_world"
+    capture_origin_frame: "base_link"
+    capture_tip_frame: "controller_tip_reversed"

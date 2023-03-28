@@ -4,7 +4,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "vive_ros2/srv/vive_path_capture.hpp"
-#include "vive_ros2/srv/vive_path_reset.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 
 using namespace std::chrono_literals;
@@ -15,21 +14,20 @@ class ViveListener : public rclcpp::Node
   public:
     ViveListener(): Node("ViveListener")
     {
-      rclcpp::Client<vive_ros2::srv::VivePathCapture>::SharedPtr capture_client = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_capture");
-      rclcpp::Client<vive_ros2::srv::VivePathReset>::SharedPtr   reset_client = this->create_client<vive_ros2::srv::VivePathReset>("/vive_pose_reset");
+      capture_client_ = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_capture");
+      reset_client_ = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_reset");
 
       this->declare_parameter<std::string>("buttons_topic", "joy_inputs");
       vive_controller_buttons_topic_ = this->get_parameter("buttons_topic").get_parameter_value().get<std::string>();
 
-
-      while (!capture_client->wait_for_service(1s)) {
+      while (!capture_client_->wait_for_service(1s)) {
         if (!rclcpp::ok()) {
           RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the capture service. Exiting.");
           break;
         }
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Capture service not available, waiting again...");
       }
-      while (!reset_client->wait_for_service(1s)) {
+      while (!reset_client_->wait_for_service(1s)) {
         if (!rclcpp::ok()) {
           RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the reset service. Exiting.");
           break;
@@ -38,8 +36,7 @@ class ViveListener : public rclcpp::Node
       }     
 
       subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(vive_controller_buttons_topic_, 10, std::bind(&ViveListener::topic_callback, this, std::placeholders::_1));
-      capture_client_ = this->create_client<vive_ros2::srv::VivePathCapture>("/vive_pose_capture");
-      reset_client_ = this->create_client<vive_ros2::srv::VivePathReset>("/vive_pose_reset");
+      
     }
 
   private:
@@ -64,7 +61,7 @@ class ViveListener : public rclcpp::Node
         auto result = capture_client_->async_send_request(request);        
       }
 
-      auto reset_request = std::make_shared<vive_ros2::srv::VivePathReset::Request>();
+      auto reset_request = std::make_shared<vive_ros2::srv::VivePathCapture::Request>();
       if (msg->buttons[0]==1){
         if (reset_state){
           duration = this->now().seconds() - t_init.seconds();
@@ -92,7 +89,7 @@ class ViveListener : public rclcpp::Node
 
     std::string vive_controller_buttons_topic_ ;
     rclcpp::Client<vive_ros2::srv::VivePathCapture>::SharedPtr capture_client_ ;
-    rclcpp::Client<vive_ros2::srv::VivePathReset>::SharedPtr reset_client_ ;
+    rclcpp::Client<vive_ros2::srv::VivePathCapture>::SharedPtr reset_client_ ;
 
     bool capturing {false};
     bool button_state {false};

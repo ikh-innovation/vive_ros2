@@ -1,5 +1,0 @@
-
-bool data # False for reset previous, true for reset all
----
-string message # informational
-nav_msgs/Path[] segments # list of captured segments

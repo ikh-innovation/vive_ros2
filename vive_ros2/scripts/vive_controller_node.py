@@ -28,15 +28,13 @@ class ViveControllerNode(Node):
         (self.host_ip, self.controller_port, self.controller_name, self.controller_link, self.buttons_topic) = self.get_parameters(
             ['host_ip', 'controller_port', 'controller_name', 'controller_link', 'buttons_topic'])
 
-        self.joy_pub = self.create_publisher(Joy, self.buttons_topic.get_parameter_value().string_value,
-            100)
+        self.joy_pub = self.create_publisher(Joy, self.buttons_topic.get_parameter_value().string_value, 100)
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
         client = ViveControllerClient(host=self.host_ip.get_parameter_value().string_value,
                                    port=self.controller_port.get_parameter_value().integer_value,
-                                   controller_name=self.controller_name.get_parameter_value().string_value,
-                                   should_record=False)
+                                   controller_name=self.controller_name.get_parameter_value().string_value)
 
         self.message_queue = Queue()
         self.kill_thread = Event()
@@ -70,15 +68,6 @@ class ViveControllerNode(Node):
                 t.transform.rotation.w = msg.qw
 
                 self.tf_broadcaster.sendTransform(t)
-                # if sum>10:
-                #     print([msg.trig, msg.pad_x, msg.pad_y])
-                #     # print([msg.menu_butt, msg.pad_touch, msg.pad_butt, msg.ul_butt, msg.ul_touch, msg.grip_butt])
-                #     print([msg.menu_butt, msg.pad_touch, msg.pad_butt, msg.grip_butt])
-
-                #     sum = 0
-                # else:
-                #     sum = sum + 1
-
                 
                 self.joy_pub.publish(joy_msg)
 
